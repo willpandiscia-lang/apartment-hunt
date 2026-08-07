@@ -170,6 +170,18 @@
     background: var(--card); border: 1px dashed var(--line); border-radius: var(--radius);
   }
 
+  /* sync settings */
+  .sync-card {
+    position: fixed; inset: 0; background: rgba(20,20,20,.55); z-index: 60;
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .sync-card.show { display: flex; }
+  .sync-inner { background: var(--card); border-radius: var(--radius); max-width: 480px; width: 100%; padding: 20px; }
+  .sync-inner h2 { font-size: 1.05rem; margin-bottom: 4px; }
+  .sync-inner p { font-size: .83rem; color: var(--muted); margin: 6px 0; }
+  .sync-row { margin: 10px 0; }
+  .sync-status { font-size: .82rem; margin-top: 8px; min-height: 1.2em; }
+
   /* modal */
   .modal {
     display: none; position: fixed; inset: 0; background: rgba(20,20,20,.85);
@@ -207,8 +219,25 @@
 
 <div class="modal" id="modal" onclick="this.classList.remove('show')"><img id="modalImg" alt="Floor plan"></div>
 
+<div class="sync-card" id="syncModal">
+  <div class="sync-inner">
+    <h2>☁️ Sync across devices</h2>
+    <p>Your data syncs through a <b>private</b> GitHub repo — only you can see it. Enter the same token on each device once; after that everything syncs automatically.</p>
+    <div class="sync-row"><label class="field">GitHub token</label><input type="password" id="syncToken" placeholder="ghp_… or github_pat_…"></div>
+    <div class="sync-row"><label class="field">Private repo (owner/name)</label><input type="text" id="syncRepo" value="willpandiscia-lang/apartment-hunt-data"></div>
+    <div class="sync-status" id="syncMsg"></div>
+    <div class="card-actions" style="justify-content:space-between">
+      <button class="danger small" onclick="disconnectSync()">Disconnect</button>
+      <span style="display:flex;gap:8px">
+        <button class="small" onclick="document.getElementById('syncModal').classList.remove('show')">Close</button>
+        <button class="primary small" onclick="connectSync()">Connect</button>
+      </span>
+    </div>
+  </div>
+</div>
+
 <footer>Tip: the ✓ / ✗ buttons mark each item good or a problem — the Compare tab tallies them.<br>
-<span style="display:inline-block;margin-top:6px">Moving to another device? <a href="#" onclick="exportData();return false" style="color:var(--accent)">Save backup file</a> · <a href="#" onclick="document.getElementById('importFile').click();return false" style="color:var(--accent)">Load backup file</a></span></footer>
+<span style="display:inline-block;margin-top:6px"><a href="#" id="syncLink" onclick="openSyncModal();return false" style="color:var(--accent);font-weight:600">☁️ Set up sync</a> · <a href="#" onclick="exportData();return false" style="color:var(--accent)">Save backup file</a> · <a href="#" onclick="document.getElementById('importFile').click();return false" style="color:var(--accent)">Load backup file</a></span></footer>
 
 <script>
 const CHECKLIST = [
@@ -284,6 +313,12 @@ function scheduleSave() {
   if (!storageOK) return;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(persist, 400);
+  if (syncCfg && !applyingRemote) {
+    syncMeta.localEditAt = Date.now();
+    kvPut("syncMeta", { ...syncMeta });
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => { syncTimer = null; pushSync(); }, 2500);
+  }
 }
 function loadPersisted() {
   return new Promise(resolve => {
@@ -322,7 +357,7 @@ function updateBanner() {
   if (storageOK) {
     document.getElementById("fileBtns").style.display = "none";
     b.style.background = "var(--accent-soft)"; b.style.borderColor = "#bcd6cb"; b.style.color = "#2b5a4c";
-    b.innerHTML = `<span id="saveStamp">✅ Auto-save is on — everything you enter is stored on this device automatically.</span>`;
+    b.innerHTML = `<span id="saveStamp">✅ Auto-save is on — everything you enter is stored on this device automatically.</span><span id="cloudStamp"></span>`;
   } else {
     b.innerHTML = `⚠️ This preview can't store data, so notes only live while the page is open. <b>Download this file and open it in your browser</b> to get automatic saving — or use <b>Save to file</b> / <b>Load saved file</b> as a manual backup.`;
   }
@@ -374,6 +409,160 @@ function toggleOpen(id) {
   p.open = !p.open;
   render();
 }
+
+/* ---- cloud sync (private GitHub repo) ---- */
+let syncCfg = null;
+let syncSha = null;
+let syncTimer = null;
+let applyingRemote = false;
+let syncStatus = "off"; // off | ok | syncing | error
+let syncMeta = { lastSyncedAt: 0, localEditAt: 0 };
+
+function kvPut(key, val) {
+  if (!db) return;
+  try { db.transaction("kv", "readwrite").objectStore("kv").put(val, key); } catch (e) {}
+}
+function kvGet(key) {
+  return new Promise(res => {
+    if (!db) return res(null);
+    try {
+      const r = db.transaction("kv", "readonly").objectStore("kv").get(key);
+      r.onsuccess = () => res(r.result === undefined ? null : r.result);
+      r.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+function b64encode(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+function b64decode(b64) {
+  const bin = atob(b64.replace(/\n/g, ""));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function ghFetch(path, opts = {}) {
+  return fetch(`https://api.github.com/repos/${syncCfg.repo}/contents/${path}`, {
+    method: opts.method || "GET",
+    body: opts.body,
+    headers: {
+      "Authorization": "Bearer " + syncCfg.token,
+      "Accept": opts.accept || "application/vnd.github+json"
+    }
+  });
+}
+function updateSyncUI() {
+  const el = document.getElementById("cloudStamp");
+  if (el) el.textContent = !syncCfg ? "" :
+    syncStatus === "error" ? " · ☁️ sync error — will retry" :
+    syncStatus === "syncing" ? " · ☁️ syncing…" : " · ☁️ synced across your devices";
+  const fl = document.getElementById("syncLink");
+  if (fl) fl.textContent = syncCfg ? "☁️ Sync: on" : "☁️ Set up sync";
+}
+function markSynced(at) {
+  syncMeta.lastSyncedAt = at;
+  syncMeta.localEditAt = at;
+  kvPut("syncMeta", { ...syncMeta });
+}
+async function pushSync() {
+  if (!syncCfg) return;
+  syncStatus = "syncing"; updateSyncUI();
+  try {
+    const at = Date.now();
+    const payload = { ...cleanState(), _sync: { updatedAt: at } };
+    const body = { message: "sync " + new Date(at).toISOString(), content: b64encode(JSON.stringify(payload)) };
+    if (syncSha) body.sha = syncSha;
+    let res = await ghFetch("data.json", { method: "PUT", body: JSON.stringify(body) });
+    if (res.status === 409 || res.status === 422) {
+      const meta = await ghFetch("data.json", { accept: "application/vnd.github.object+json" });
+      if (meta.ok) {
+        const j = await meta.json();
+        syncSha = j.sha;
+        body.sha = syncSha;
+        res = await ghFetch("data.json", { method: "PUT", body: JSON.stringify(body) });
+      }
+    }
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const out = await res.json();
+    syncSha = out.content.sha;
+    markSynced(at);
+    syncStatus = "ok";
+  } catch (e) { syncStatus = "error"; }
+  updateSyncUI();
+}
+async function pullSync() {
+  if (!syncCfg || syncTimer) return; // local edits pending — they win, push will follow
+  try {
+    const meta = await ghFetch("data.json", { accept: "application/vnd.github.object+json" });
+    if (meta.status === 404) {
+      if (state.properties.length || state.current) pushSync();
+      else { syncStatus = "ok"; updateSyncUI(); }
+      return;
+    }
+    if (!meta.ok) throw new Error(meta.status);
+    const j = await meta.json();
+    syncSha = j.sha;
+    let text;
+    if (j.content) text = b64decode(j.content);
+    else {
+      const raw = await ghFetch("data.json", { accept: "application/vnd.github.raw+json" });
+      text = await raw.text();
+    }
+    const remote = JSON.parse(text);
+    const rAt = (remote._sync && remote._sync.updatedAt) || 0;
+    if (rAt > Math.max(syncMeta.lastSyncedAt, syncMeta.localEditAt)) {
+      delete remote._sync;
+      applyingRemote = true;
+      upgradeState(remote);
+      state = remote;
+      uid = maxUid(state.properties);
+      render();
+      applyingRemote = false;
+      persist();
+      markSynced(rAt);
+    } else if (syncMeta.localEditAt > syncMeta.lastSyncedAt) {
+      pushSync(); // we have unpushed local edits newer than the cloud
+      return;
+    }
+    syncStatus = "ok";
+  } catch (e) { syncStatus = "error"; }
+  updateSyncUI();
+}
+function openSyncModal() {
+  const m = document.getElementById("syncModal");
+  document.getElementById("syncMsg").textContent = syncCfg ? "Connected ✓" : "";
+  if (syncCfg) { document.getElementById("syncToken").value = syncCfg.token; document.getElementById("syncRepo").value = syncCfg.repo; }
+  m.classList.add("show");
+}
+async function connectSync() {
+  const token = document.getElementById("syncToken").value.trim();
+  const repo = document.getElementById("syncRepo").value.trim().replace(/^https?:\/\/github\.com\//, "").replace(/\/$/, "");
+  const msg = document.getElementById("syncMsg");
+  if (!token || !repo) { msg.textContent = "Enter both the token and the repo."; return; }
+  msg.textContent = "Checking…";
+  try {
+    const res = await fetch("https://api.github.com/repos/" + repo, { headers: { "Authorization": "Bearer " + token } });
+    if (res.status === 404) throw new Error("Repo not found — check the name, and that the token has access to it.");
+    if (!res.ok) throw new Error("Token rejected (HTTP " + res.status + ")");
+    syncCfg = { token, repo };
+    kvPut("syncCfg", { ...syncCfg });
+    msg.textContent = "Connected ✓ — syncing…";
+    await pullSync();
+    msg.textContent = "Connected ✓ — you can close this.";
+    updateSyncUI();
+  } catch (e) { msg.textContent = "⚠️ " + e.message; }
+}
+function disconnectSync() {
+  syncCfg = null; syncSha = null; syncStatus = "off";
+  kvPut("syncCfg", null);
+  document.getElementById("syncMsg").textContent = "Sync is off. Your data stays on this device.";
+  updateSyncUI();
+}
+setInterval(() => { if (syncCfg && document.visibilityState === "visible") pullSync(); }, 45000);
+document.addEventListener("visibilitychange", () => { if (syncCfg && document.visibilityState === "visible") pullSync(); });
 
 /* ---- my current place (baseline) ---- */
 function addCurrent() {
@@ -746,10 +935,17 @@ initStorage().then(async () => {
       state = saved;
       uid = maxUid(state.properties);
     }
+    syncCfg = await kvGet("syncCfg");
+    const sm = await kvGet("syncMeta");
+    if (sm) syncMeta = sm;
   }
   updateBanner();
+  applyingRemote = true;
   render();
+  applyingRemote = false;
   dirty = false;
+  updateSyncUI();
+  if (syncCfg) pullSync();
 });
 </script>
 </body>
