@@ -207,7 +207,8 @@
 
 <div class="modal" id="modal" onclick="this.classList.remove('show')"><img id="modalImg" alt="Floor plan"></div>
 
-<footer>Tip: the ✓ / ✗ buttons mark each item good or a problem — the Compare tab tallies them.</footer>
+<footer>Tip: the ✓ / ✗ buttons mark each item good or a problem — the Compare tab tallies them.<br>
+<span style="display:inline-block;margin-top:6px">Moving to another device? <a href="#" onclick="exportData();return false" style="color:var(--accent)">Save backup file</a> · <a href="#" onclick="document.getElementById('importFile').click();return false" style="color:var(--accent)">Load backup file</a></span></footer>
 
 <script>
 const CHECKLIST = [
