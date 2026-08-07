@@ -448,6 +448,7 @@ function ghFetch(path, opts = {}) {
   return fetch(`https://api.github.com/repos/${syncCfg.repo}/contents/${path}`, {
     method: opts.method || "GET",
     body: opts.body,
+    cache: "no-store",
     headers: {
       "Authorization": "Bearer " + syncCfg.token,
       "Accept": opts.accept || "application/vnd.github+json"
