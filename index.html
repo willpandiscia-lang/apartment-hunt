@@ -649,35 +649,49 @@ function setCheckNote(id, item, note) {
   scheduleSave();
 }
 
-function compressImage(file) {
+function loadable(dataUrl) {
   return new Promise(res => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      const max = 1600;
-      let w = img.width, h = img.height;
-      if (Math.max(w, h) > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
-      const c = document.createElement("canvas");
-      c.width = w; c.height = h;
-      c.getContext("2d").drawImage(img, 0, 0, w, h);
-      URL.revokeObjectURL(url);
-      res(c.toDataURL("image/jpeg", 0.82));
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      const r = new FileReader();
-      r.onload = e => res(e.target.result);
-      r.readAsDataURL(file);
-    };
-    img.src = url;
+    const i = new Image();
+    i.onload = () => res(i.naturalWidth > 0);
+    i.onerror = () => res(false);
+    i.src = dataUrl;
   });
+}
+async function compressImage(file) {
+  // read the original first — always a correct fallback
+  const raw = await new Promise(res => {
+    const r = new FileReader();
+    r.onload = e => res(e.target.result);
+    r.onerror = () => res(null);
+    r.readAsDataURL(file);
+  });
+  try {
+    const url = URL.createObjectURL(file);
+    const img = await new Promise((res, rej) => {
+      const i = new Image();
+      i.onload = () => res(i);
+      i.onerror = rej;
+      i.src = url;
+    });
+    const max = 1600;
+    let w = img.width, h = img.height;
+    if (Math.max(w, h) > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+    const c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(img, 0, 0, w, h);
+    URL.revokeObjectURL(url);
+    const out = c.toDataURL("image/jpeg", 0.82);
+    // some privacy extensions corrupt canvas output — only use it if it actually decodes
+    if (out && out.length > 100 && await loadable(out)) return out;
+  } catch (e) {}
+  return raw;
 }
 function handlePlans(id, ev) {
   const p = state.properties.find(x => x.id === id);
   const files = Array.from(ev.target.files || []);
   if (!files.length) return;
   Promise.all(files.map(f => compressImage(f).then(data => ({ name: f.name, data }))))
-    .then(plans => { p.plans.push(...plans); render(); });
+    .then(plans => { p.plans.push(...plans.filter(pl => pl.data)); render(); });
   ev.target.value = "";
 }
 function removePlan(id, i) {
