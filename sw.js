@@ -1,4 +1,4 @@
-const CACHE = "apt-hunt-v2";
+const CACHE = "apt-hunt-v3";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", e => {
@@ -19,7 +19,7 @@ self.addEventListener("fetch", e => {
   const isNav = e.request.mode === "navigate" || e.request.destination === "document";
   if (isNav) {
     e.respondWith(
-      fetch(e.request).then(res => {
+      fetch(e.request, { cache: "no-cache" }).then(res => {
         if (res.ok) { const copy = res.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
         return res;
       }).catch(() => caches.match(e.request, { ignoreSearch: true }).then(r => r || caches.match("./index.html")))
