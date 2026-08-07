@@ -232,6 +232,18 @@ const CHECKLIST = [
   { group: "Storage & Space", items: [
     "Closet space for your stuff", "Room for your furniture (measure!)",
     "Extra storage (basement, garage, bike room)" ]},
+  { group: "Luxury Building & Amenities", items: [
+    "Amenity fee: how much per year & what's included?",
+    "Which amenities cost extra? (cabanas, guest suites, classes)",
+    "Gym & pool: hours, equipment, how crowded at peak times?",
+    "Roof deck / lounges: hours, reservation rules, grill access",
+    "Doorman / concierge 24-7? How are packages & cold food handled?",
+    "Pet policy: pet rent or fees, dog run / pet spa",
+    "Parking & bike storage: monthly cost and waitlist",
+    "Coworking / party room: booking rules & fees",
+    "Is the advertised rent net-effective? How many free months?",
+    "Expected renewal increase once the concession ends",
+    "Move-in fees, deposits & elevator reservation" ]},
 ];
 
 let state = { properties: [], current: null };
@@ -282,11 +294,16 @@ function loadPersisted() {
     } catch (e) { resolve(null); }
   });
 }
+function upgradeState(data) {
+  upgradeProperties(data.properties);
+  if (data.current && data.current.sqft === undefined) data.current.sqft = "";
+}
 function upgradeProperties(props) {
   props.forEach(p => {
     if (!p.type) p.type = "rental";
     if (p.unit === undefined) p.unit = "";
     if (p.fees === undefined) p.fees = "";
+    if (p.sqft === undefined) p.sqft = "";
     if (!p.checks) p.checks = {};
     CHECKLIST.forEach(g => g.items.forEach(item => {
       if (!p.checks[item]) p.checks[item] = { v: 0, note: "" };
@@ -315,7 +332,7 @@ function newProperty() {
   CHECKLIST.forEach(g => g.items.forEach(item => { checks[item] = { v: 0, note: "" }; }));
   return {
     id: "p" + (uid++),
-    name: "", address: "", type: "rental", unit: "", price: "", fees: "", bedbath: "", time: "",
+    name: "", address: "", type: "rental", unit: "", price: "", fees: "", bedbath: "", sqft: "", time: "",
     rating: 0, plans: [], checks, pros: "", cons: "", notes: "", open: true
   };
 }
@@ -359,7 +376,7 @@ function toggleOpen(id) {
 
 /* ---- my current place (baseline) ---- */
 function addCurrent() {
-  state.current = { name: "", address: "", unit: "", type: "rental", price: "", fees: "", bedbath: "", notes: "" };
+  state.current = { name: "", address: "", unit: "", type: "rental", price: "", fees: "", bedbath: "", sqft: "", notes: "" };
   render();
 }
 function setCur(field, val) { state.current[field] = val; scheduleSave(); }
@@ -407,7 +424,8 @@ function renderCurrentCard() {
         ${isRent ? `<div><label class="field">Apt / unit #</label><input type="text" value="${esc(c.unit)}" placeholder="e.g. 4B" oninput="setCur('unit',this.value)"></div>` : ""}
         <div><label class="field">${isRent ? "Monthly rent" : "Mortgage payment /mo"}</label><input type="text" value="${esc(c.price)}" placeholder="$" oninput="setCur('price',this.value)"></div>
         <div><label class="field">${isRent ? "Other monthly fees" : "HOA + other fees /mo"}</label><input type="text" value="${esc(c.fees)}" placeholder="parking, pet, HOA…" oninput="setCur('fees',this.value)"></div>
-        <div><label class="field">Beds / baths · sqft</label><input type="text" value="${esc(c.bedbath)}" placeholder="1bd / 1ba · 700 sqft" oninput="setCur('bedbath',this.value)"></div>
+        <div><label class="field">Beds / baths</label><input type="text" value="${esc(c.bedbath)}" placeholder="1bd / 1ba" oninput="setCur('bedbath',this.value)"></div>
+        <div><label class="field">Sqft</label><input type="text" value="${esc(c.sqft)}" placeholder="e.g. 700" oninput="setCur('sqft',this.value)"></div>
       </div>
       <div style="margin-top:10px"><label class="field">Notes on your current place</label><textarea placeholder="What you'd miss, what you're escaping…" oninput="setCur('notes',this.value)">${esc(c.notes)}</textarea></div>
       <div class="card-actions">
@@ -540,7 +558,8 @@ function render() {
           ${p.type === 'rental' ? `<div><label class="field">Apt / unit #</label><input type="text" value="${esc(p.unit)}" placeholder="e.g. 4B" oninput="setField('${p.id}','unit',this.value)"></div>` : ""}
           <div><label class="field">${p.type === 'rental' ? "Monthly rent" : "Asking price"}</label><input type="text" value="${esc(p.price)}" placeholder="$" oninput="setField('${p.id}','price',this.value)"></div>
           <div><label class="field">${p.type === 'rental' ? "Other monthly fees" : "HOA / fees per month"}</label><input type="text" value="${esc(p.fees)}" placeholder="parking, pet, HOA…" oninput="setField('${p.id}','fees',this.value)"></div>
-          <div><label class="field">Beds / baths · sqft</label><input type="text" value="${esc(p.bedbath)}" placeholder="2bd / 1ba · 950 sqft" oninput="setField('${p.id}','bedbath',this.value)"></div>
+          <div><label class="field">Beds / baths</label><input type="text" value="${esc(p.bedbath)}" placeholder="2bd / 1ba" oninput="setField('${p.id}','bedbath',this.value)"></div>
+          <div><label class="field">Sqft</label><input type="text" value="${esc(p.sqft)}" placeholder="e.g. 950" oninput="setField('${p.id}','sqft',this.value)"></div>
           <div><label class="field">Viewing time</label><input type="text" value="${esc(p.time)}" placeholder="e.g. 10:30 AM" oninput="setField('${p.id}','time',this.value)"></div>
         </div>
 
@@ -551,9 +570,13 @@ function render() {
               <img src="${pl.data}" alt="${esc(pl.name)}" onclick="zoomPlan('${p.id}',${i})">
               <button class="rm" title="Remove" onclick="removePlan('${p.id}',${i})">✕</button>
             </div>`).join("")}
+          <div class="upload-tile" onclick="document.getElementById('cam-${p.id}').click()">
+            <span class="plus">📷</span><span>Take photo</span>
+          </div>
           <div class="upload-tile" onclick="document.getElementById('file-${p.id}').click()">
             <span class="plus">＋</span><span>Add floor plan<br>or photo</span>
           </div>
+          <input type="file" id="cam-${p.id}" accept="image/*" capture="environment" style="display:none" onchange="handlePlans('${p.id}', event)">
           <input type="file" id="file-${p.id}" accept="image/*" multiple style="display:none" onchange="handlePlans('${p.id}', event)">
         </div>
 
@@ -604,6 +627,16 @@ function renderHeadOnly() { /* light refresh of headers without stealing input f
   });
 }
 
+function sqftCell(x) {
+  const sq = parseMoney(x.sqft);
+  if (!sq) return esc(x.sqft) || "—";
+  const money = parseMoney(x.price);
+  if (money === null) return sq.toLocaleString();
+  const per = money / sq;
+  const perStr = per >= 10 ? "$" + Math.round(per).toLocaleString() : "$" + per.toFixed(2);
+  return `${sq.toLocaleString()}<br><span style="color:var(--muted);font-size:.8rem">${perStr}/sqft</span>`;
+}
+
 function deltaCell(p) {
   const base = currentMonthly();
   if (base === null) return "—";
@@ -635,11 +668,12 @@ function renderCompare() {
         <td>${esc(c.fees) || "—"}</td>
         <td>${total !== null ? "$" + total.toLocaleString() + "/mo" : "—"}</td>
         <td>${esc(c.bedbath) || "—"}</td>
+        <td>${sqftCell(c)}</td>
         <td>—</td><td>—</td><td>—</td>
         <td colspan="2" style="max-width:300px;white-space:pre-wrap;color:var(--muted)">${esc(c.notes) || "—"}</td>
       </tr>` : "";
   v.innerHTML = `<div class="compare-wrap"><table>
-    <thead><tr><th>Property</th><th>Type</th><th>Price / Rent</th><th>Fees /mo</th><th>vs Current</th><th>Beds/Baths</th><th>Rating</th><th>✓ Good</th><th>✗ Problems</th><th>Pros</th><th>Cons</th></tr></thead>
+    <thead><tr><th>Property</th><th>Type</th><th>Price / Rent</th><th>Fees /mo</th><th>vs Current</th><th>Beds/Baths</th><th>Sqft</th><th>Rating</th><th>✓ Good</th><th>✗ Problems</th><th>Pros</th><th>Cons</th></tr></thead>
     <tbody>
       ${baselineRow}
       ${scored.map(({ p, s }) => `<tr>
@@ -649,6 +683,7 @@ function renderCompare() {
         <td>${esc(p.fees) || "—"}</td>
         <td>${deltaCell(p)}</td>
         <td>${esc(p.bedbath) || "—"}</td>
+        <td>${sqftCell(p)}</td>
         <td class="${p.rating && p.rating === bestRating ? 'best' : ''}"><span class="stars">${p.rating ? starStr(p.rating) : "—"}</span></td>
         <td class="${s.good && s.good === bestGood ? 'best' : ''}">${s.good}</td>
         <td style="${s.bad ? 'color:var(--bad);font-weight:600' : ''}">${s.bad}</td>
@@ -679,7 +714,7 @@ function importData(ev) {
       const data = JSON.parse(e.target.result);
       if (!data.properties) throw new Error("bad file");
       // merge any new checklist items added since the save
-      upgradeProperties(data.properties);
+      upgradeState(data);
       state = data;
       uid = maxUid(state.properties);
       render();
@@ -706,7 +741,7 @@ initStorage().then(async () => {
   if (storageOK) {
     const saved = await loadPersisted();
     if (saved && Array.isArray(saved.properties)) {
-      upgradeProperties(saved.properties);
+      upgradeState(saved);
       state = saved;
       uid = maxUid(state.properties);
     }
