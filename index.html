@@ -416,6 +416,7 @@ let syncSha = null;
 let syncTimer = null;
 let applyingRemote = false;
 let syncStatus = "off"; // off | ok | syncing | error
+let syncErr = "";
 let syncMeta = { lastSyncedAt: 0, localEditAt: 0 };
 
 function kvPut(key, val) {
@@ -458,7 +459,7 @@ function ghFetch(path, opts = {}) {
 function updateSyncUI() {
   const el = document.getElementById("cloudStamp");
   if (el) el.textContent = !syncCfg ? "" :
-    syncStatus === "error" ? " · ☁️ sync error — will retry" :
+    syncStatus === "error" ? ` · ☁️ sync error (${syncErr || "network"}) — retrying` :
     syncStatus === "syncing" ? " · ☁️ syncing…" : " · ☁️ synced across your devices";
   const fl = document.getElementById("syncLink");
   if (fl) fl.textContent = syncCfg ? "☁️ Sync: on" : "☁️ Set up sync";
@@ -486,12 +487,12 @@ async function pushSync() {
         res = await ghFetch("data.json", { method: "PUT", body: JSON.stringify(body) });
       }
     }
-    if (!res.ok) throw new Error("HTTP " + res.status);
+    if (!res.ok) throw new Error(res.status === 401 || res.status === 403 ? "token rejected" : "save failed HTTP " + res.status);
     const out = await res.json();
     syncSha = out.content.sha;
     markSynced(at);
-    syncStatus = "ok";
-  } catch (e) { syncStatus = "error"; }
+    syncStatus = "ok"; syncErr = "";
+  } catch (e) { syncStatus = "error"; syncErr = e.message || "network"; }
   updateSyncUI();
 }
 async function pullSync() {
@@ -503,7 +504,7 @@ async function pullSync() {
       else { syncStatus = "ok"; updateSyncUI(); }
       return;
     }
-    if (!meta.ok) throw new Error(meta.status);
+    if (!meta.ok) throw new Error(meta.status === 401 || meta.status === 403 ? "token rejected" : "read failed HTTP " + meta.status);
     const j = await meta.json();
     syncSha = j.sha;
     let text;
@@ -528,8 +529,8 @@ async function pullSync() {
       pushSync(); // we have unpushed local edits newer than the cloud
       return;
     }
-    syncStatus = "ok";
-  } catch (e) { syncStatus = "error"; }
+    syncStatus = "ok"; syncErr = "";
+  } catch (e) { syncStatus = "error"; syncErr = e.message || "network"; }
   updateSyncUI();
 }
 function openSyncModal() {
@@ -562,8 +563,9 @@ function disconnectSync() {
   document.getElementById("syncMsg").textContent = "Sync is off. Your data stays on this device.";
   updateSyncUI();
 }
-setInterval(() => { if (syncCfg && document.visibilityState === "visible") pullSync(); }, 45000);
+setInterval(() => { if (syncCfg && document.visibilityState === "visible") pullSync(); }, 15000);
 document.addEventListener("visibilitychange", () => { if (syncCfg && document.visibilityState === "visible") pullSync(); });
+window.addEventListener("focus", () => { if (syncCfg) pullSync(); });
 
 /* ---- my current place (baseline) ---- */
 function addCurrent() {
@@ -938,7 +940,10 @@ window.addEventListener("beforeunload", e => {
 
 /* offline support when hosted (no-op when opened as a local file) */
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {});
+  navigator.serviceWorker.register("./sw.js").then(reg => reg.update()).catch(() => {});
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!window.__swReloaded) { window.__swReloaded = true; location.reload(); }
+  });
 }
 
 /* ---- startup: restore saved data if available ---- */
