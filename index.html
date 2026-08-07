@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Apartment Hunt</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2f6f5e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Apt Hunt">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #f6f4ef;
+    --card: #ffffff;
+    --ink: #1f2937;
+    --muted: #6b7280;
+    --line: #e5e1d8;
+    --accent: #2f6f5e;
+    --accent-soft: #e3efe9;
+    --bad: #b4513f;
+    --bad-soft: #f6e5e0;
+    --warn: #b58a2f;
+    --warn-soft: #f5edd9;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--ink);
+    padding: 20px; max-width: 1100px; margin: 0 auto;
+  }
+  header { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  h1 { font-size: 1.5rem; letter-spacing: -0.01em; }
+  h1 span { color: var(--accent); }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 14px; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+  button {
+    font: inherit; cursor: pointer; border: 1px solid var(--line);
+    background: var(--card); color: var(--ink);
+    padding: 8px 14px; border-radius: 10px; font-size: 0.88rem;
+    transition: background .15s, border-color .15s;
+  }
+  button:hover { border-color: var(--accent); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #275c4e; }
+  button.danger { color: var(--bad); }
+  button.small { padding: 4px 10px; font-size: 0.8rem; border-radius: 8px; }
+
+  .banner {
+    background: var(--warn-soft); border: 1px solid #e4d3a5; color: #6d5416;
+    border-radius: var(--radius); padding: 10px 14px; font-size: 0.85rem; margin-bottom: 16px;
+  }
+
+  .tabs { display: flex; gap: 6px; margin-bottom: 18px; }
+  .tab {
+    padding: 8px 18px; border-radius: 999px; border: 1px solid var(--line);
+    background: transparent; font-weight: 600; color: var(--muted);
+  }
+  .tab.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+  .prop-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    margin-bottom: 18px; overflow: hidden;
+  }
+  .prop-head {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 14px 18px; cursor: pointer; user-select: none;
+  }
+  .prop-head:hover { background: #fbfaf7; }
+  .prop-title { font-weight: 700; font-size: 1.05rem; flex: 1; min-width: 180px; }
+  .prop-title .addr { font-weight: 400; color: var(--muted); font-size: 0.85rem; display: block; }
+  .chev { color: var(--muted); transition: transform .2s; }
+  .open .chev { transform: rotate(90deg); }
+  .score-pill {
+    font-size: 0.78rem; font-weight: 700; padding: 3px 10px; border-radius: 999px;
+    background: var(--accent-soft); color: var(--accent);
+  }
+  .stars { color: #d9a514; font-size: 1rem; letter-spacing: 2px; }
+
+  .prop-body { display: none; padding: 0 18px 18px; border-top: 1px solid var(--line); }
+  .open .prop-body { display: block; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin: 14px 0; }
+  label.field { display: block; font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  input[type=text], input[type=time], textarea {
+    font: inherit; width: 100%; padding: 8px 10px; margin-top: 4px;
+    border: 1px solid var(--line); border-radius: 8px; background: #fdfcfa;
+  }
+  textarea { resize: vertical; min-height: 70px; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+
+  h3.sec { font-size: 0.82rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 20px 0 8px; }
+
+  /* floor plans */
+  .plans { display: flex; flex-wrap: wrap; gap: 10px; }
+  .plan-thumb { position: relative; }
+  .plan-thumb img {
+    width: 130px; height: 130px; object-fit: cover; border-radius: 10px;
+    border: 1px solid var(--line); cursor: zoom-in; display: block;
+  }
+  .plan-thumb .rm {
+    position: absolute; top: -6px; right: -6px; width: 22px; height: 22px;
+    border-radius: 50%; background: var(--ink); color: #fff; border: none;
+    font-size: 12px; line-height: 22px; padding: 0; text-align: center;
+  }
+  .upload-tile {
+    width: 130px; height: 130px; border: 2px dashed var(--line); border-radius: 10px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    color: var(--muted); font-size: 0.78rem; cursor: pointer; gap: 4px; background: #fdfcfa;
+  }
+  .upload-tile:hover { border-color: var(--accent); color: var(--accent); }
+  .upload-tile .plus { font-size: 1.6rem; line-height: 1; }
+
+  /* checklist */
+  .check-group { margin-bottom: 4px; }
+  .check-item {
+    display: flex; align-items: center; gap: 10px; padding: 7px 0;
+    border-bottom: 1px dashed var(--line); flex-wrap: wrap;
+  }
+  .check-item:last-child { border-bottom: none; }
+  .ci-label { flex: 1 1 180px; font-size: 0.92rem; }
+  .tri { display: flex; gap: 4px; }
+  .tri button {
+    width: 34px; height: 30px; padding: 0; border-radius: 8px; font-size: 0.95rem;
+    color: var(--muted); background: #fdfcfa;
+  }
+  .tri button.on-good { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .tri button.on-bad  { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+  .ci-note { flex: 2 1 220px; }
+  .ci-note input { margin-top: 0; font-size: 0.85rem; padding: 6px 9px; }
+
+  .type-toggle { display: inline-flex; gap: 0; margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .type-toggle button { border: none; border-radius: 0; padding: 7px 16px; font-size: 0.85rem; color: var(--muted); background: #fdfcfa; }
+  .type-toggle button.sel { background: var(--ink); color: #fff; font-weight: 600; }
+  .type-pill { font-size: 0.72rem; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: .04em; }
+  .type-pill.rental { background: #e3eaf5; color: #33578c; }
+  .type-pill.purchase { background: #f0e5f2; color: #7a4a85; }
+  .type-pill.current { background: #f3ead4; color: #8a6a1c; }
+
+  .cur-add {
+    border: 2px dashed var(--line); border-radius: var(--radius); background: #fdfcfa;
+    padding: 14px 18px; color: var(--muted); font-size: 0.9rem; cursor: pointer; margin-bottom: 18px;
+  }
+  .cur-add:hover { border-color: var(--accent); color: var(--accent); }
+  .cur-card { border-color: #dcc98e; background: #fffdf6; }
+  .delta-up { color: var(--bad); font-weight: 700; }
+  .delta-down { color: var(--accent); font-weight: 700; }
+  tr.baseline td { background: #fdf8ea; }
+
+  .rating-row { display: flex; align-items: center; gap: 8px; margin: 6px 0 2px; }
+  .rating-row button { border: none; background: none; font-size: 1.5rem; padding: 2px; color: #d8d3c6; }
+  .rating-row button.lit { color: #d9a514; }
+
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .two-col { grid-template-columns: 1fr; } }
+
+  .card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+
+  /* compare */
+  .compare-wrap { overflow-x: auto; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+  table { border-collapse: collapse; width: 100%; min-width: 900px; font-size: 0.88rem; }
+  th, td { padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #faf8f4; font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); white-space: nowrap; }
+  td.best { background: var(--accent-soft); font-weight: 600; }
+  .empty {
+    text-align: center; color: var(--muted); padding: 60px 20px;
+    background: var(--card); border: 1px dashed var(--line); border-radius: var(--radius);
+  }
+
+  /* modal */
+  .modal {
+    display: none; position: fixed; inset: 0; background: rgba(20,20,20,.85);
+    z-index: 50; align-items: center; justify-content: center; padding: 24px; cursor: zoom-out;
+  }
+  .modal.show { display: flex; }
+  .modal img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.78rem; margin: 30px 0 10px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🏠 Apartment <span>Hunt</span></h1>
+  <div class="toolbar">
+    <span id="fileBtns">
+      <button onclick="exportData()">💾 Save to file</button>
+      <button onclick="document.getElementById('importFile').click()">📂 Load saved file</button>
+    </span>
+    <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+    <button class="primary" onclick="addProperty()">＋ Add property</button>
+  </div>
+</header>
+<div class="sub">Saturday viewings — floor plans, checklists &amp; notes, all in one place.</div>
+
+<div class="banner" id="banner">⚠️ Notes live in this page only while it's open. Tap <b>Save to file</b> before closing (or between viewings) to download a backup you can reload later with <b>Load saved file</b>.</div>
+
+<div class="tabs">
+  <button class="tab active" id="tabProps" onclick="showTab('props')">Properties</button>
+  <button class="tab" id="tabCompare" onclick="showTab('compare')">Compare</button>
+</div>
+
+<div id="propsView"></div>
+<div id="compareView" style="display:none"></div>
+
+<div class="modal" id="modal" onclick="this.classList.remove('show')"><img id="modalImg" alt="Floor plan"></div>
+
+<footer>Tip: the ✓ / ✗ buttons mark each item good or a problem — the Compare tab tallies them.</footer>
+
+<script>
+const CHECKLIST = [
+  { group: "Light & Layout", items: [
+    "Natural light in main rooms", "Layout flows well / no wasted space", "Ceiling height feels good",
+    "Windows open, screens intact", "Views / what windows face" ]},
+  { group: "Condition", items: [
+    "Walls & ceilings (cracks, stains, fresh paint hiding issues?)", "Floors level & in good shape",
+    "Signs of water damage or mold (check under sinks, closets)", "Doors & windows close properly",
+    "Smells okay (musty, smoke, pets)" ]},
+  { group: "Kitchen & Bath", items: [
+    "Water pressure (run shower & faucets)", "Hot water arrives quickly", "Toilets flush well",
+    "Appliances: age & condition (stove, fridge, dishwasher)", "Counter & cabinet space",
+    "Ventilation / exhaust fans work" ]},
+  { group: "Systems & Comfort", items: [
+    "Heating / AC type, condition, who controls it", "Enough outlets, in the right places",
+    "Cell signal in every room", "Water heater & electrical panel condition",
+    "Laundry: in-unit, in-building, or none" ]},
+  { group: "Noise & Neighbors", items: [
+    "Street / traffic noise with windows closed", "Sound from neighbors (listen quietly for a minute)",
+    "Proximity to elevator / trash / mechanicals" ]},
+  { group: "Storage & Space", items: [
+    "Closet space for your stuff", "Room for your furniture (measure!)",
+    "Extra storage (basement, garage, bike room)" ]},
+];
+
+let state = { properties: [], current: null };
+let uid = 1;
+let curArmed = false;
+
+/* ---- auto-save (IndexedDB) ---- */
+let db = null, storageOK = false, saveTimer = null, dirty = false;
+
+function initStorage() {
+  return new Promise(resolve => {
+    try {
+      const req = indexedDB.open("apt-hunt", 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore("kv");
+      req.onsuccess = e => { db = e.target.result; storageOK = true; resolve(true); };
+      req.onerror = () => resolve(false);
+    } catch (e) { resolve(false); }
+  });
+}
+function cleanState() {
+  return JSON.parse(JSON.stringify(state, (k, v) => k === "_armed" ? undefined : v));
+}
+function persist() {
+  if (!db) return;
+  try {
+    const tx = db.transaction("kv", "readwrite");
+    tx.objectStore("kv").put(cleanState(), "state");
+    tx.oncomplete = () => {
+      dirty = false;
+      const el = document.getElementById("saveStamp");
+      if (el) el.textContent = "✅ Auto-save is on — saved just now.";
+    };
+  } catch (e) {}
+}
+function scheduleSave() {
+  dirty = true;
+  if (!storageOK) return;
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(persist, 400);
+}
+function loadPersisted() {
+  return new Promise(resolve => {
+    if (!db) return resolve(null);
+    try {
+      const req = db.transaction("kv", "readonly").objectStore("kv").get("state");
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    } catch (e) { resolve(null); }
+  });
+}
+function upgradeProperties(props) {
+  props.forEach(p => {
+    if (!p.type) p.type = "rental";
+    if (p.unit === undefined) p.unit = "";
+    if (p.fees === undefined) p.fees = "";
+    if (!p.checks) p.checks = {};
+    CHECKLIST.forEach(g => g.items.forEach(item => {
+      if (!p.checks[item]) p.checks[item] = { v: 0, note: "" };
+    }));
+  });
+}
+function maxUid(props) {
+  return 1 + props.reduce((m, p) => {
+    const n = parseInt(String(p.id).replace(/^p/, ""), 10);
+    return isNaN(n) ? m : Math.max(m, n);
+  }, 0);
+}
+function updateBanner() {
+  const b = document.getElementById("banner");
+  if (storageOK) {
+    document.getElementById("fileBtns").style.display = "none";
+    b.style.background = "var(--accent-soft)"; b.style.borderColor = "#bcd6cb"; b.style.color = "#2b5a4c";
+    b.innerHTML = `<span id="saveStamp">✅ Auto-save is on — everything you enter is stored on this device automatically.</span>`;
+  } else {
+    b.innerHTML = `⚠️ This preview can't store data, so notes only live while the page is open. <b>Download this file and open it in your browser</b> to get automatic saving — or use <b>Save to file</b> / <b>Load saved file</b> as a manual backup.`;
+  }
+}
+
+function newProperty() {
+  const checks = {};
+  CHECKLIST.forEach(g => g.items.forEach(item => { checks[item] = { v: 0, note: "" }; }));
+  return {
+    id: "p" + (uid++),
+    name: "", address: "", type: "rental", unit: "", price: "", fees: "", bedbath: "", time: "",
+    rating: 0, plans: [], checks, pros: "", cons: "", notes: "", open: true
+  };
+}
+
+function addProperty() {
+  state.properties.push(newProperty());
+  render();
+  showTab('props');
+  const cards = document.querySelectorAll('.prop-card');
+  const last = cards[cards.length - 1];
+  if (last) { last.scrollIntoView({ behavior: 'smooth' }); const inp = last.querySelector('input'); if (inp) inp.focus(); }
+}
+
+function removeProperty(id) {
+  const p = state.properties.find(x => x.id === id);
+  if (!confirmDelete(p)) return;
+  state.properties = state.properties.filter(x => x.id !== id);
+  render();
+}
+function confirmDelete(p) {
+  // avoid blocking dialogs; use a two-tap pattern instead
+  if (p._armed) return true;
+  p._armed = true;
+  render();
+  setTimeout(() => { p._armed = false; render(); }, 3000);
+  return false;
+}
+
+function setField(id, field, val) {
+  const p = state.properties.find(x => x.id === id);
+  p[field] = val;
+  if (["name", "address", "unit", "time"].includes(field)) renderHeadOnly();
+  scheduleSave();
+}
+
+function toggleOpen(id) {
+  const p = state.properties.find(x => x.id === id);
+  p.open = !p.open;
+  render();
+}
+
+/* ---- my current place (baseline) ---- */
+function addCurrent() {
+  state.current = { name: "", address: "", unit: "", type: "rental", price: "", fees: "", bedbath: "", notes: "" };
+  render();
+}
+function setCur(field, val) { state.current[field] = val; scheduleSave(); }
+function setCurType(t) { state.current.type = t; render(); }
+function removeCurrent() {
+  if (!curArmed) {
+    curArmed = true; render();
+    setTimeout(() => { curArmed = false; render(); }, 3000);
+    return;
+  }
+  state.current = null; curArmed = false; render();
+}
+function parseMoney(s) {
+  const m = String(s || "").replace(/,/g, "").match(/(\d+(\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+}
+function currentMonthly() {
+  const c = state.current;
+  if (!c) return null;
+  const base = parseMoney(c.price);
+  if (base === null) return null;
+  return base + (parseMoney(c.fees) || 0);
+}
+
+function renderCurrentCard() {
+  const c = state.current;
+  if (!c) return `<div class="cur-add" onclick="addCurrent()">🏡 <b>Add your current place</b> — enter what you pay now so the Compare tab shows how each option stacks up against it.</div>`;
+  const isRent = c.type === "rental";
+  const total = currentMonthly();
+  return `
+  <div class="prop-card cur-card open">
+    <div class="prop-head" style="cursor:default">
+      <div class="prop-title">🏡 ${esc(c.name) || "My current place"}<span class="addr">${esc(c.address)}${isRent && c.unit ? " · Apt " + esc(c.unit) : ""}</span></div>
+      ${total !== null ? `<span class="score-pill">$${total.toLocaleString()}/mo now</span>` : ""}
+      <span class="type-pill current">Baseline</span>
+    </div>
+    <div class="prop-body">
+      <div class="type-toggle">
+        <button class="${isRent ? 'sel' : ''}" onclick="setCurType('rental')">🔑 I rent</button>
+        <button class="${!isRent ? 'sel' : ''}" onclick="setCurType('own')">🏷️ I own</button>
+      </div>
+      <div class="grid">
+        <div><label class="field">Nickname</label><input type="text" value="${esc(c.name)}" placeholder="e.g. Current apartment" oninput="setCur('name',this.value)"></div>
+        <div><label class="field">Address</label><input type="text" value="${esc(c.address)}" placeholder="Street address" oninput="setCur('address',this.value)"></div>
+        ${isRent ? `<div><label class="field">Apt / unit #</label><input type="text" value="${esc(c.unit)}" placeholder="e.g. 4B" oninput="setCur('unit',this.value)"></div>` : ""}
+        <div><label class="field">${isRent ? "Monthly rent" : "Mortgage payment /mo"}</label><input type="text" value="${esc(c.price)}" placeholder="$" oninput="setCur('price',this.value)"></div>
+        <div><label class="field">${isRent ? "Other monthly fees" : "HOA + other fees /mo"}</label><input type="text" value="${esc(c.fees)}" placeholder="parking, pet, HOA…" oninput="setCur('fees',this.value)"></div>
+        <div><label class="field">Beds / baths · sqft</label><input type="text" value="${esc(c.bedbath)}" placeholder="1bd / 1ba · 700 sqft" oninput="setCur('bedbath',this.value)"></div>
+      </div>
+      <div style="margin-top:10px"><label class="field">Notes on your current place</label><textarea placeholder="What you'd miss, what you're escaping…" oninput="setCur('notes',this.value)">${esc(c.notes)}</textarea></div>
+      <div class="card-actions">
+        <button class="danger small" onclick="removeCurrent()">${curArmed ? "Tap again to confirm delete" : "Remove baseline"}</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function setType(id, t) {
+  const p = state.properties.find(x => x.id === id);
+  p.type = t;
+  render();
+}
+
+function setRating(id, n) {
+  const p = state.properties.find(x => x.id === id);
+  p.rating = (p.rating === n) ? 0 : n;
+  render();
+}
+
+function setCheck(id, item, val) {
+  const p = state.properties.find(x => x.id === id);
+  const c = p.checks[item];
+  c.v = (c.v === val) ? 0 : val;
+  render();
+}
+function setCheckNote(id, item, note) {
+  const p = state.properties.find(x => x.id === id);
+  p.checks[item].note = note;
+  scheduleSave();
+}
+
+function compressImage(file) {
+  return new Promise(res => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      const max = 1600;
+      let w = img.width, h = img.height;
+      if (Math.max(w, h) > max) { const k = max / Math.max(w, h); w = Math.round(w * k); h = Math.round(h * k); }
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      c.getContext("2d").drawImage(img, 0, 0, w, h);
+      URL.revokeObjectURL(url);
+      res(c.toDataURL("image/jpeg", 0.82));
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.readAsDataURL(file);
+    };
+    img.src = url;
+  });
+}
+function handlePlans(id, ev) {
+  const p = state.properties.find(x => x.id === id);
+  const files = Array.from(ev.target.files || []);
+  if (!files.length) return;
+  Promise.all(files.map(f => compressImage(f).then(data => ({ name: f.name, data }))))
+    .then(plans => { p.plans.push(...plans); render(); });
+  ev.target.value = "";
+}
+function removePlan(id, i) {
+  const p = state.properties.find(x => x.id === id);
+  p.plans.splice(i, 1);
+  render();
+}
+function zoomPlan(id, i) {
+  const p = state.properties.find(x => x.id === id);
+  document.getElementById('modalImg').src = p.plans[i].data;
+  document.getElementById('modal').classList.add('show');
+}
+
+function scoreOf(p) {
+  let good = 0, bad = 0;
+  Object.values(p.checks).forEach(c => { if (c.v === 1) good++; else if (c.v === -1) bad++; });
+  return { good, bad };
+}
+
+function esc(s) { return (s || "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/"/g,"&quot;"); }
+function headAddr(p) {
+  const parts = [];
+  if (p.address) parts.push(esc(p.address));
+  if (p.type === "rental" && p.unit) parts.push("Apt " + esc(p.unit));
+  if (p.time) parts.push(esc(p.time));
+  return parts.join(" · ");
+}
+function starStr(n) { return "★".repeat(n) + "☆".repeat(5 - n); }
+
+function showTab(t) {
+  document.getElementById('tabProps').classList.toggle('active', t === 'props');
+  document.getElementById('tabCompare').classList.toggle('active', t === 'compare');
+  document.getElementById('propsView').style.display = t === 'props' ? '' : 'none';
+  document.getElementById('compareView').style.display = t === 'compare' ? '' : 'none';
+  if (t === 'compare') renderCompare();
+}
+
+function render() {
+  const v = document.getElementById('propsView');
+  const cur = renderCurrentCard();
+  if (!state.properties.length) {
+    v.innerHTML = cur + `<div class="empty"><p style="font-size:2rem">🗝️</p><p style="margin-top:8px">No properties yet.</p>
+      <p style="margin:6px 0 14px">Add each condo or apartment you're seeing Saturday.</p>
+      <button class="primary" onclick="addProperty()">＋ Add your first property</button></div>`;
+    renderCompare();
+    scheduleSave();
+    return;
+  }
+  v.innerHTML = cur + state.properties.map(p => {
+    const s = scoreOf(p);
+    return `
+    <div class="prop-card ${p.open ? 'open' : ''}" id="card-${p.id}">
+      <div class="prop-head" onclick="toggleOpen('${p.id}')">
+        <span class="chev">▶</span>
+        <div class="prop-title">${esc(p.name) || "Untitled property"}<span class="addr">${headAddr(p)}</span></div>
+        <span class="type-pill ${p.type}">${p.type === 'rental' ? 'Rental' : 'Purchase'}</span>
+        ${p.rating ? `<span class="stars">${starStr(p.rating)}</span>` : ""}
+        <span class="score-pill">✓ ${s.good}${s.bad ? ` &nbsp;·&nbsp; <span style="color:var(--bad)">✗ ${s.bad}</span>` : ""}</span>
+      </div>
+      <div class="prop-body">
+        <div class="type-toggle">
+          <button class="${p.type === 'rental' ? 'sel' : ''}" onclick="setType('${p.id}','rental')">🔑 Rental</button>
+          <button class="${p.type === 'purchase' ? 'sel' : ''}" onclick="setType('${p.id}','purchase')">🏷️ Purchase</button>
+        </div>
+        <div class="grid">
+          <div><label class="field">Name / listing</label><input type="text" value="${esc(p.name)}" placeholder="e.g. 2BR on Maple St" oninput="setField('${p.id}','name',this.value)"></div>
+          <div><label class="field">Address</label><input type="text" value="${esc(p.address)}" placeholder="Street address" oninput="setField('${p.id}','address',this.value)"></div>
+          ${p.type === 'rental' ? `<div><label class="field">Apt / unit #</label><input type="text" value="${esc(p.unit)}" placeholder="e.g. 4B" oninput="setField('${p.id}','unit',this.value)"></div>` : ""}
+          <div><label class="field">${p.type === 'rental' ? "Monthly rent" : "Asking price"}</label><input type="text" value="${esc(p.price)}" placeholder="$" oninput="setField('${p.id}','price',this.value)"></div>
+          <div><label class="field">${p.type === 'rental' ? "Other monthly fees" : "HOA / fees per month"}</label><input type="text" value="${esc(p.fees)}" placeholder="parking, pet, HOA…" oninput="setField('${p.id}','fees',this.value)"></div>
+          <div><label class="field">Beds / baths · sqft</label><input type="text" value="${esc(p.bedbath)}" placeholder="2bd / 1ba · 950 sqft" oninput="setField('${p.id}','bedbath',this.value)"></div>
+          <div><label class="field">Viewing time</label><input type="text" value="${esc(p.time)}" placeholder="e.g. 10:30 AM" oninput="setField('${p.id}','time',this.value)"></div>
+        </div>
+
+        <h3 class="sec">Floor plans &amp; photos</h3>
+        <div class="plans">
+          ${p.plans.map((pl, i) => `
+            <div class="plan-thumb">
+              <img src="${pl.data}" alt="${esc(pl.name)}" onclick="zoomPlan('${p.id}',${i})">
+              <button class="rm" title="Remove" onclick="removePlan('${p.id}',${i})">✕</button>
+            </div>`).join("")}
+          <div class="upload-tile" onclick="document.getElementById('file-${p.id}').click()">
+            <span class="plus">＋</span><span>Add floor plan<br>or photo</span>
+          </div>
+          <input type="file" id="file-${p.id}" accept="image/*" multiple style="display:none" onchange="handlePlans('${p.id}', event)">
+        </div>
+
+        <h3 class="sec">Walkthrough checklist <span style="font-weight:400;text-transform:none;letter-spacing:0">— ✓ good · ✗ problem</span></h3>
+        ${CHECKLIST.map(g => `
+          <div class="check-group">
+            <div style="font-weight:700;font-size:0.85rem;margin:12px 0 2px">${g.group}</div>
+            ${g.items.map(item => {
+              const c = p.checks[item];
+              return `<div class="check-item">
+                <span class="ci-label" style="${c.v === 1 ? 'color:var(--accent)' : c.v === -1 ? 'color:var(--bad)' : ''}">${esc(item)}</span>
+                <span class="tri">
+                  <button class="${c.v === 1 ? 'on-good' : ''}" onclick="setCheck('${p.id}','${esc(item).replace(/'/g,"\\'")}',1)">✓</button>
+                  <button class="${c.v === -1 ? 'on-bad' : ''}" onclick="setCheck('${p.id}','${esc(item).replace(/'/g,"\\'")}',-1)">✗</button>
+                </span>
+                <span class="ci-note"><input type="text" value="${esc(c.note)}" placeholder="note…" oninput="setCheckNote('${p.id}','${esc(item).replace(/'/g,"\\'")}',this.value)"></span>
+              </div>`;
+            }).join("")}
+          </div>`).join("")}
+
+        <h3 class="sec">Overall rating</h3>
+        <div class="rating-row">
+          ${[1,2,3,4,5].map(n => `<button class="${p.rating >= n ? 'lit' : ''}" onclick="setRating('${p.id}',${n})">★</button>`).join("")}
+        </div>
+
+        <div class="two-col" style="margin-top:12px">
+          <div><label class="field">Pros 👍</label><textarea placeholder="What you loved…" oninput="setField('${p.id}','pros',this.value)">${esc(p.pros)}</textarea></div>
+          <div><label class="field">Cons 👎</label><textarea placeholder="Dealbreakers or worries…" oninput="setField('${p.id}','cons',this.value)">${esc(p.cons)}</textarea></div>
+        </div>
+        <div style="margin-top:12px"><label class="field">Other notes</label><textarea placeholder="Questions asked, agent answers, HOA/fees, parking, gut feeling…" oninput="setField('${p.id}','notes',this.value)">${esc(p.notes)}</textarea></div>
+
+        <div class="card-actions">
+          <button class="danger small" onclick="removeProperty('${p.id}')">${p._armed ? "Tap again to confirm delete" : "Delete property"}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  renderCompare();
+  scheduleSave();
+}
+
+function renderHeadOnly() { /* light refresh of headers without stealing input focus */
+  state.properties.forEach(p => {
+    const card = document.getElementById('card-' + p.id);
+    if (!card) return;
+    const t = card.querySelector('.prop-title');
+    if (t) t.innerHTML = `${esc(p.name) || "Untitled property"}<span class="addr">${headAddr(p)}</span>`;
+  });
+}
+
+function deltaCell(p) {
+  const base = currentMonthly();
+  if (base === null) return "—";
+  if (p.type !== "rental") return `<span style="color:var(--muted)" title="Monthly cost of a purchase depends on your mortgage — not compared automatically">n/a</span>`;
+  const rent = parseMoney(p.price);
+  if (rent === null) return "—";
+  const diff = Math.round((rent + (parseMoney(p.fees) || 0)) - base);
+  if (diff === 0) return "same";
+  return diff > 0
+    ? `<span class="delta-up">+$${Math.abs(diff).toLocaleString()}/mo</span>`
+    : `<span class="delta-down">−$${Math.abs(diff).toLocaleString()}/mo</span>`;
+}
+
+function renderCompare() {
+  const v = document.getElementById('compareView');
+  if (!state.properties.length && !state.current) {
+    v.innerHTML = `<div class="empty">Add properties first — then compare them here.</div>`;
+    return;
+  }
+  const c = state.current;
+  const total = currentMonthly();
+  const scored = state.properties.map(p => ({ p, s: scoreOf(p) }));
+  const bestGood = Math.max(0, ...scored.map(x => x.s.good));
+  const bestRating = Math.max(0, ...scored.map(x => x.p.rating));
+  const baselineRow = c ? `<tr class="baseline">
+        <td><b>🏡 ${esc(c.name) || "My current place"}</b><br><span style="color:var(--muted);font-size:.8rem">${esc(c.address)}${c.type === 'rental' && c.unit ? " · Apt " + esc(c.unit) : ""}</span></td>
+        <td><span class="type-pill current">Now</span></td>
+        <td>${esc(c.price) || "—"}${c.price ? '<span style="color:var(--muted)">/mo</span>' : ""}</td>
+        <td>${esc(c.fees) || "—"}</td>
+        <td>${total !== null ? "$" + total.toLocaleString() + "/mo" : "—"}</td>
+        <td>${esc(c.bedbath) || "—"}</td>
+        <td>—</td><td>—</td><td>—</td>
+        <td colspan="2" style="max-width:300px;white-space:pre-wrap;color:var(--muted)">${esc(c.notes) || "—"}</td>
+      </tr>` : "";
+  v.innerHTML = `<div class="compare-wrap"><table>
+    <thead><tr><th>Property</th><th>Type</th><th>Price / Rent</th><th>Fees /mo</th><th>vs Current</th><th>Beds/Baths</th><th>Rating</th><th>✓ Good</th><th>✗ Problems</th><th>Pros</th><th>Cons</th></tr></thead>
+    <tbody>
+      ${baselineRow}
+      ${scored.map(({ p, s }) => `<tr>
+        <td><b>${esc(p.name) || "Untitled"}</b><br><span style="color:var(--muted);font-size:.8rem">${esc(p.address)}${p.type === 'rental' && p.unit ? " · Apt " + esc(p.unit) : ""}</span></td>
+        <td><span class="type-pill ${p.type}">${p.type === 'rental' ? 'Rental' : 'Purchase'}</span></td>
+        <td>${esc(p.price) || "—"}${p.type === 'rental' && p.price ? '<span style="color:var(--muted)">/mo</span>' : ""}</td>
+        <td>${esc(p.fees) || "—"}</td>
+        <td>${deltaCell(p)}</td>
+        <td>${esc(p.bedbath) || "—"}</td>
+        <td class="${p.rating && p.rating === bestRating ? 'best' : ''}"><span class="stars">${p.rating ? starStr(p.rating) : "—"}</span></td>
+        <td class="${s.good && s.good === bestGood ? 'best' : ''}">${s.good}</td>
+        <td style="${s.bad ? 'color:var(--bad);font-weight:600' : ''}">${s.bad}</td>
+        <td style="max-width:220px;white-space:pre-wrap">${esc(p.pros) || "—"}</td>
+        <td style="max-width:220px;white-space:pre-wrap">${esc(p.cons) || "—"}</td>
+      </tr>`).join("")}
+    </tbody>
+  </table></div>
+  <p style="color:var(--muted);font-size:.8rem;margin-top:10px">${c ? `"vs Current" compares each rental's total monthly cost (rent + fees) against your current $${total !== null ? total.toLocaleString() : "—"}/mo. ` : ""}Highlighted cells mark the leader in that column.</p>`;
+}
+
+/* ---- save / load ---- */
+function exportData() {
+  const blob = new Blob([JSON.stringify(cleanState(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  const d = new Date();
+  a.download = `apartment-hunt-${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importData(ev) {
+  const f = ev.target.files[0];
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (!data.properties) throw new Error("bad file");
+      // merge any new checklist items added since the save
+      upgradeProperties(data.properties);
+      state = data;
+      uid = maxUid(state.properties);
+      render();
+    } catch (err) {
+      document.querySelector(".banner").textContent = "⚠️ Couldn't read that file — make sure it's a save file from this app.";
+    }
+  };
+  r.readAsText(f);
+  ev.target.value = "";
+}
+
+/* warn before closing with unsaved changes (only when auto-save isn't available) */
+window.addEventListener("beforeunload", e => {
+  if (dirty && !storageOK && (state.properties.length || state.current)) { e.preventDefault(); e.returnValue = ""; }
+});
+
+/* offline support when hosted (no-op when opened as a local file) */
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+
+/* ---- startup: restore saved data if available ---- */
+initStorage().then(async () => {
+  if (storageOK) {
+    const saved = await loadPersisted();
+    if (saved && Array.isArray(saved.properties)) {
+      upgradeProperties(saved.properties);
+      state = saved;
+      uid = maxUid(state.properties);
+    }
+  }
+  updateBanner();
+  render();
+  dirty = false;
+});
+</script>
+</body>
+</html>
