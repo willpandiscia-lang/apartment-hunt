@@ -333,6 +333,7 @@ function loadPersisted() {
 function upgradeState(data) {
   upgradeProperties(data.properties);
   if (data.current && data.current.sqft === undefined) data.current.sqft = "";
+  if (data.current && data.current.market === undefined) data.current.market = "";
 }
 function upgradeProperties(props) {
   props.forEach(p => {
@@ -569,7 +570,7 @@ window.addEventListener("focus", () => { if (syncCfg) pullSync(); });
 
 /* ---- my current place (baseline) ---- */
 function addCurrent() {
-  state.current = { name: "", address: "", unit: "", type: "rental", price: "", fees: "", bedbath: "", sqft: "", notes: "" };
+  state.current = { name: "", address: "", unit: "", type: "rental", price: "", fees: "", market: "", bedbath: "", sqft: "", notes: "" };
   render();
 }
 function setCur(field, val) { state.current[field] = val; scheduleSave(); }
@@ -617,6 +618,7 @@ function renderCurrentCard() {
         ${isRent ? `<div><label class="field">Apt / unit #</label><input type="text" value="${esc(c.unit)}" placeholder="e.g. 4B" oninput="setCur('unit',this.value)"></div>` : ""}
         <div><label class="field">${isRent ? "Monthly rent" : "Mortgage payment /mo"}</label><input type="text" value="${esc(c.price)}" placeholder="$" oninput="setCur('price',this.value)"></div>
         <div><label class="field">${isRent ? "Other monthly fees" : "HOA + other fees /mo"}</label><input type="text" value="${esc(c.fees)}" placeholder="parking, pet, HOA…" oninput="setCur('fees',this.value)"></div>
+        ${isRent ? `<div><label class="field">Market rate /mo (without lottery)</label><input type="text" value="${esc(c.market)}" placeholder="what it'd rent for normally" oninput="setCur('market',this.value)"></div>` : ""}
         <div><label class="field">Beds / baths</label><input type="text" value="${esc(c.bedbath)}" placeholder="1bd / 1ba" oninput="setCur('bedbath',this.value)"></div>
         <div><label class="field">Sqft</label><input type="text" value="${esc(c.sqft)}" placeholder="e.g. 700" oninput="setCur('sqft',this.value)"></div>
       </div>
@@ -844,17 +846,26 @@ function sqftCell(x) {
   return `${sq.toLocaleString()}<br><span style="color:var(--muted);font-size:.8rem">${perStr}/sqft</span>`;
 }
 
+function fmtDelta(diff) {
+  if (diff === 0) return "same";
+  return diff > 0
+    ? `<span class="delta-up">+$${Math.abs(diff).toLocaleString()}/mo</span>`
+    : `<span class="delta-down">−$${Math.abs(diff).toLocaleString()}/mo</span>`;
+}
 function deltaCell(p) {
   const base = currentMonthly();
   if (base === null) return "—";
   if (p.type !== "rental") return `<span style="color:var(--muted)" title="Monthly cost of a purchase depends on your mortgage — not compared automatically">n/a</span>`;
   const rent = parseMoney(p.price);
   if (rent === null) return "—";
-  const diff = Math.round((rent + (parseMoney(p.fees) || 0)) - base);
-  if (diff === 0) return "same";
-  return diff > 0
-    ? `<span class="delta-up">+$${Math.abs(diff).toLocaleString()}/mo</span>`
-    : `<span class="delta-down">−$${Math.abs(diff).toLocaleString()}/mo</span>`;
+  const total = rent + (parseMoney(p.fees) || 0);
+  let out = fmtDelta(Math.round(total - base));
+  const mkt = state.current ? parseMoney(state.current.market) : null;
+  if (mkt !== null) {
+    const mktBase = mkt + (parseMoney(state.current.fees) || 0);
+    out += `<br><span style="color:var(--muted);font-size:.78rem">vs mkt: ${fmtDelta(Math.round(total - mktBase))}</span>`;
+  }
+  return out;
 }
 
 function renderCompare() {
@@ -871,7 +882,7 @@ function renderCompare() {
   const baselineRow = c ? `<tr class="baseline">
         <td><b>🏡 ${esc(c.name) || "My current place"}</b><br><span style="color:var(--muted);font-size:.8rem">${esc(c.address)}${c.type === 'rental' && c.unit ? " · Apt " + esc(c.unit) : ""}</span></td>
         <td><span class="type-pill current">Now</span></td>
-        <td>${esc(c.price) || "—"}${c.price ? '<span style="color:var(--muted)">/mo</span>' : ""}</td>
+        <td>${esc(c.price) || "—"}${c.price ? '<span style="color:var(--muted)">/mo</span>' : ""}${parseMoney(c.market) !== null ? `<br><span style="color:var(--muted);font-size:.78rem">market ~$${parseMoney(c.market).toLocaleString()}</span>` : ""}</td>
         <td>${esc(c.fees) || "—"}</td>
         <td>${total !== null ? "$" + total.toLocaleString() + "/mo" : "—"}</td>
         <td>${esc(c.bedbath) || "—"}</td>
@@ -899,7 +910,7 @@ function renderCompare() {
       </tr>`).join("")}
     </tbody>
   </table></div>
-  <p style="color:var(--muted);font-size:.8rem;margin-top:10px">${c ? `"vs Current" compares each rental's total monthly cost (rent + fees) against your current $${total !== null ? total.toLocaleString() : "—"}/mo. ` : ""}Highlighted cells mark the leader in that column.</p>`;
+  <p style="color:var(--muted);font-size:.8rem;margin-top:10px">${c ? `"vs Current" compares each rental's total monthly cost (rent + fees) against your current $${total !== null ? total.toLocaleString() : "—"}/mo${parseMoney(c.market) !== null ? " — the small \"vs mkt\" line compares against your unit's market value instead of your lottery rate" : ""}. ` : ""}Highlighted cells mark the leader in that column.</p>`;
 }
 
 /* ---- save / load ---- */
